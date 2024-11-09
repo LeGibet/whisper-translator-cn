@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+logs/
+output/
+.DS_Store
+config.yaml
+!config.yaml.template

@@ -1,0 +1,32 @@
+# OpenAI API 配置
+api_key: "your-api-key"
+api_base: "https://api.openai.com/v1"
+model: "gpt-4o-mini"
+
+# 翻译设置
+translation:
+  max_retries: 3
+  retry_delay: 1
+  temperature: 0.2
+  prompts:
+    batch: |
+      将以下语音识别的字幕逐行翻译成中文。注意每行是一条字幕，输入输出行数必须严格一致。若某行内容无法识别或无实际意义，则返回空行。保持原文语气和语境，考虑上下文连贯。仅输出翻译结果，每行一句字幕翻译，用换行符分隔。
+    single: |
+      将此语音识别的字幕翻译成中文，保持原文语气和语境。若原文识别不清楚或没有实际意义则不翻译，返回空行。仅输出翻译内容。
+
+# 语音识别配置
+whisper:
+  engine: "faster-whisper"  # "whisper-cpp" 或 "faster-whisper"
+
+  # whisper.cpp 相关配置
+  whisper_cpp:
+    binary_path: "/path/to/whisper.cpp"     # whisper.cpp 路径
+    model_path: "/path/to/models/model.bin"  # 模型文件路径
+
+  # faster-whisper 相关配置 
+  faster_whisper:
+    model: "base"          # 模型名称
+    compute_type: "float16"   # 可选: float32, float16, int8
+    cpu_threads: 4
+
+
