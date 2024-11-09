@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import List, Optional
 from pathlib import Path
-from logger import logger, console, log_detail
+from .logger import get_logger, console, log_detail
 import re
-from translate import translate_single, translate_batch
+from .translate import translate_single, translate_batch
 
 TIME_PATTERN = re.compile(r'^\d{2}:\d{2}:\d{2},\d{3}$')
 
@@ -31,6 +31,7 @@ class SubtitleEntry:
 
 def parse_srt(file_path: str) -> List[SubtitleEntry]:
     """解析SRT字幕文件"""
+    logger = get_logger()
     entries = []
     current_entry = None
     
@@ -106,7 +107,8 @@ def clean_text(text: str) -> str:
     number_prefix_pattern = re.compile(r'^\d+[.。,，、\s]*')
     text = number_prefix_pattern.sub('', text).strip()
     
-    return text
+    # 移除末尾的标点符号
+    return text.strip('。，！？,.!?')
 
 async def translate_subtitles(
     entries: List[SubtitleEntry],
@@ -115,6 +117,7 @@ async def translate_subtitles(
     progress_file: Optional[Path] = None
 ) -> List[SubtitleEntry]:
     """翻译字幕条目"""
+    logger = get_logger()
     try:
         total = len(entries)
         console.print(f"[info]开始翻译 {total} 条字幕[/info]")
@@ -169,6 +172,7 @@ def save_srt(entries: List[SubtitleEntry], output_path: str, chinese_only: bool 
 
 def save_lrcx(entries: List[SubtitleEntry], output_path: str, chinese_only: bool = False) -> None:
     """保存为LRCX格式歌词文件"""
+    logger = get_logger()
     if not entries:
         raise ValueError("没有可用的歌词条目")
     
@@ -185,17 +189,6 @@ def save_lrcx(entries: List[SubtitleEntry], output_path: str, chinese_only: bool
             return f"[{minutes:02d}:{seconds:02d}.{ms[:2]}]"
         except:
             return time_str
-    
-    def clean_text(text: str) -> str:
-        """清理文本，移除数字前缀和多余标点"""
-        if not text:
-            return ""
-        text = text.strip()
-        if text[0].isdigit():
-            parts = text.split('.', 1) if '.' in text else text.split('。', 1)
-            if len(parts) > 1 and parts[0].strip().isdigit():
-                text = parts[1].strip()
-        return text.strip('。，！？,.!?')
     
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write("[ver:1.0]\n")
@@ -217,6 +210,7 @@ def save_lrcx(entries: List[SubtitleEntry], output_path: str, chinese_only: bool
 
 def parse_lrcx(file_path: str) -> List[SubtitleEntry]:
     """解析LRCX歌词文件"""
+    logger = get_logger()
     entries = []
     index = 1
     

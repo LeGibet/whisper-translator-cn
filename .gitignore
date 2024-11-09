@@ -6,3 +6,20 @@ output/
 .DS_Store
 config.yaml
 !config.yaml.template
+
+# Python packaging
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+
+# Virtual environments
+venv/
+env/
+.env/
+.venv/

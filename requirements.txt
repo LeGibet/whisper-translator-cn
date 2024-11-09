@@ -1,7 +1,0 @@
-openai>=1.12.0
-rich>=13.7.0
-pyyaml>=6.0.1
-pydub>=0.25.1
-
-# 可选，仅使用 faster-whisper 时需要
-faster-whisper
