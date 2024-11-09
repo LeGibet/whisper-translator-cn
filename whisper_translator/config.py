@@ -5,10 +5,10 @@ import shutil
 from pathlib import Path
 import pkg_resources
 
-CONFIG_ENV_VAR = "WHISPER_TRANSLATOR_CN_CONFIG"
+CONFIG_ENV_VAR = "WHISPER_TRANSLATOR_CONFIG"
 DEFAULT_CONFIG_PATHS = [
     Path.cwd() / "config.yaml",  # 当前工作目录
-    Path.home() / ".config" / "whisper-translator-cn" / "config.yaml",  # 用户配置目录
+    Path.home() / ".config" / "whisper_translator" / "config.yaml",  # 用户配置目录
 ]
 
 class ConfigurationError(Exception):
