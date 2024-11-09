@@ -75,6 +75,8 @@ from whisper_translator import process_file, init_config
 # 初始化配置（如果还没有配置文件）
 config_path = init_config()
 
+# 在配置文件中填入相关配置
+
 # 处理文件
 await process_file(
     input_path="video.mp4",
@@ -87,48 +89,11 @@ await process_file(
 )
 ```
 
-## 配置文件说明
-
-配置文件采用YAML格式，主要包含以下部分：
-
-```yaml
-# OpenAI API配置
-api_key: "your-api-key"
-api_base: "https://api.openai.com/v1"
-model: "gpt-4o-mini"
-
-# 翻译相关配置
-translation:
-  temperature: 0.3
-  max_retries: 3
-  retry_delay: 1
-  prompts:
-    single: "将以下文本翻译为中文："
-    batch: "将以下编号文本翻译为中文，保持相同的编号格式："
-
-# Whisper引擎配置
-whisper:
-  # 选择使用的引擎: "faster-whisper" 或 "whisper-cpp"
-  engine: "faster-whisper"
-  
-  # Faster Whisper配置
-  faster_whisper:
-    model: "large-v3"
-    compute_type: "float16"
-    cpu_threads: 4
-  
-  # Whisper.cpp配置
-  whisper_cpp:
-    binary_path: "/path/to/whisper.cpp"
-    model_path: "/path/to/model.bin"
-```
-
 ## 使用建议
 
-1. 为获得最好的识别效果，建议使用清晰的音频输入
-2. 对于较长的视频，建议使用批量翻译模式（-t batch）
-3. 使用 `whisper-translator-cn run -h` 查看所有可用选项
-4. Whisper 生成的字幕可能存在错误或幻觉，建议自行检查并校正字幕内容
+1. 对于较长的视频，建议使用批量翻译模式（-t batch）
+2. 使用 `whisper-translator-cn run -h` 查看所有可用选项
+3. Whisper 生成的字幕可能存在错误或幻觉，建议自行检查并校正字幕内容
 
 ## 许可证
 
