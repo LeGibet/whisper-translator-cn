@@ -1,6 +1,8 @@
 # Whisper Translator CN
 一个基于 Whisper 和 OpenAI API 的音视频字幕/歌词生成与中文翻译工具。(自用小工具，代码和文档使用了AI润色。参考了[subtitle-translator](https://github.com/fanxing333/subtitle-translator)。)
 
+> 可以在 `python-package` 分支查看Python包版本，支持通过pip安装使用。
+
 ## 功能特性
 
 - 生成视频字幕 (输出 SRT 格式)
