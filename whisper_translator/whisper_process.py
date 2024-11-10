@@ -1,30 +1,15 @@
 import asyncio
-import contextlib
-import tempfile
-import re
 from pathlib import Path
 from typing import Tuple
 from pydub import AudioSegment
 from faster_whisper import WhisperModel
-from .logger import get_logger, console, log_detail
+from .logger import logger, console, log_subprocess
+import re
 
-class WhisperProcessError(Exception):
-    """Whisper处理错误"""
-    pass
-
-@contextlib.contextmanager
-def temp_wav_file(output_dir: Path):
-    """临时WAV文件管理器"""
-    temp_path = output_dir / f"temp_{next(tempfile._get_candidate_names())}.wav"
-    try:
-        yield temp_path
-    finally:
-        temp_path.unlink(missing_ok=True)
-        log_detail("已清理临时WAV文件")
-
-async def convert_to_wav(input_path: Path, wav_path: Path) -> None:
+async def convert_to_wav(input_path: Path, output_dir: Path) -> Path:
     """将输入音频转换为WAV格式"""
-    log_detail(f"开始音频格式转换: {input_path} -> {wav_path}")
+    wav_path = output_dir / f"{input_path.stem}.wav"
+    
     try:
         audio = await asyncio.to_thread(
             AudioSegment.from_file, 
@@ -32,111 +17,120 @@ async def convert_to_wav(input_path: Path, wav_path: Path) -> None:
             format=input_path.suffix[1:]
         )
         
-        audio = audio.set_frame_rate(16000).set_channels(1)
-        
         await asyncio.to_thread(
-            audio.export,
+            audio.set_frame_rate(16000).set_channels(1).export,
             wav_path,
             format="wav",
             parameters=["-c:a", "pcm_s16le"]
         )
-        log_detail("音频转换成功")
+        return wav_path
         
     except Exception as e:
-        raise WhisperProcessError(f"音频转换失败: {str(e)}")
+        if wav_path.exists():
+            wav_path.unlink()
+        raise RuntimeError(f"音频转换失败: {str(e)}")
 
-async def process_whisper_cpp(input_path: Path, output_dir: Path, config: dict) -> Tuple[Path, str]:
-    """使用 whisper.cpp 处理音频文件"""
-    cpp_config = config["whisper_cpp"]
-    whisper_path = Path(cpp_config["binary_path"])
-    model_path = Path(cpp_config["model_path"])
-    
-    console.print(f"[info]使用模型: {model_path.name}[/info]")
-    log_detail(f"Whisper.cpp配置: 程序={whisper_path}, 模型={model_path}")
-    
-    if not whisper_path.exists() or not model_path.exists():
-        raise WhisperProcessError(f"程序或模型文件不存在")
+def format_timestamp(seconds: float) -> str:
+    """格式化时间戳为SRT格式"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    msecs = int((seconds * 1000) % 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{msecs:03d}"
 
-    with temp_wav_file(output_dir) as wav_path:
-        await convert_to_wav(input_path, wav_path)
-        
-        cmd = [
-            str(whisper_path / "main"),
-            "-m", str(model_path),
-            "-f", str(wav_path.absolute()),
-            "-osrt",
-            "-of", wav_path.stem,
-            "-l", "auto",
-            "-bs", "8",
-            "-bo", "8",
-        ]
-        log_detail(f"执行命令: {' '.join(cmd)}")
-        
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=output_dir
-        )
-        stdout, stderr = await process.communicate()
-        
-        expected_output = output_dir / f"{wav_path.stem}.srt"
-        if not expected_output.exists():
-            error_msg = stderr.decode() if stderr else "未知错误"
-            raise WhisperProcessError(f"Whisper.cpp执行失败: {error_msg}")
-        
-        if stdout:
-            log_detail(f"程序输出:\n{stdout.decode()}")
-            
-        stderr_text = stderr.decode() if stderr else ""
-        if stderr_text:
-            for line in stderr_text.splitlines():
-                if any(x in line.lower() for x in ['error', 'exception', 'failed']):
-                    log_detail(f"错误: {line}")
-                else:
-                    log_detail(f"状态: {line}")
-        
-        detected_lang = "auto"
-        lang_match = re.search(r"auto-detected language: (\w+)", stderr_text)
-        if lang_match:
-            detected_lang = lang_match.group(1)
-            
-        final_output = output_dir / f"{input_path.stem}.srt"
-        expected_output.rename(final_output)
-        
-        return final_output, detected_lang
+async def run_whisper_cpp(
+    wav_path: Path,
+    output_dir: Path,
+    binary_path: Path,
+    model_path: Path
+) -> Tuple[Path, str]:
+    """运行whisper.cpp引擎"""
+    # 获取whisper.cpp目录和main执行文件路径
+    whisper_dir = binary_path
+    main_executable = whisper_dir / "main"
 
-async def process_faster_whisper(input_path: Path, output_dir: Path, config: dict) -> Tuple[Path, str]:
-    """使用 faster-whisper 处理音频文件"""
-    fw_config = config["faster_whisper"]
+    # 验证路径
+    if not whisper_dir.exists():
+        raise FileNotFoundError(f"whisper.cpp目录不存在: {whisper_dir}")
+    if not main_executable.exists():
+        raise FileNotFoundError(f"whisper.cpp执行文件不存在: {main_executable}")
+    if not model_path.exists():
+        raise FileNotFoundError(f"模型文件不存在: {model_path}")
     
-    log_detail(f"Faster Whisper配置: 模型={fw_config['model']}, 计算类型={fw_config.get('compute_type', 'float16')}")
-    console.print(f"[info]使用模型: {fw_config['model']}[/info]")
+    # 设置命令
+    cmd = [
+        str(main_executable),
+        "-m", str(model_path),
+        "-f", str(wav_path.absolute()),
+        "-osrt",
+        "-of", wav_path.stem,
+        "-l", "auto",
+        "-bs", "8",
+        "-bo", "8",
+    ]
     
+    # 执行命令
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=output_dir
+    )
+    stdout, stderr = await process.communicate()
+    
+    # 记录输出到日志
+    if stdout:
+        log_subprocess(stdout)
+    if stderr:
+        log_subprocess(stderr)
+    
+    # 检查输出
+    expected_output = output_dir / f"{wav_path.stem}.srt"
+    if not expected_output.exists():
+        error_msg = stderr.decode() if stderr else "未知错误"
+        raise RuntimeError(f"Whisper.cpp执行失败: {error_msg}")
+    
+    # 提取检测到的语言
+    stderr_text = stderr.decode() if stderr else ""
+    lang_match = re.search(r"auto-detected language: (\w+)", stderr_text)
+    detected_lang = lang_match.group(1) if lang_match else "auto"
+    
+    return expected_output, detected_lang
+
+async def run_faster_whisper(
+    input_path: Path,
+    output_dir: Path,
+    model_config: dict
+) -> Tuple[Path, str]:
+    """运行faster-whisper引擎"""
+    # 初始化模型
     model = WhisperModel(
-        model_size_or_path=fw_config["model"], 
+        model_size_or_path=model_config["model"],
         device="auto",
-        compute_type=fw_config.get("compute_type", "float16"),
-        cpu_threads=fw_config.get("cpu_threads", 4),
+        compute_type=model_config.get("compute_type", "float16"),
+        cpu_threads=model_config.get("cpu_threads", 4)
     )
     
+    # 转写音频
     segments, info = await asyncio.to_thread(
-        model.transcribe, 
+        model.transcribe,
         str(input_path),
         language=None,
-        task="transcribe"
+        task="transcribe",
+        callback=lambda progress: logger.debug(f"转录进度: {progress:.1%}")
     )
     
+    # 生成SRT文件
     output_srt = output_dir / f"{input_path.stem}.srt"
-    with open(output_srt, "w", encoding="utf-8") as srt_file:
+    with open(output_srt, "w", encoding="utf-8") as srt:
         for i, segment in enumerate(segments, start=1):
-            start = f"{int(segment.start // 3600):02d}:{int(segment.start % 3600 // 60):02d}:{int(segment.start % 60):02d},{int(segment.start * 1000 % 1000):03d}"
-            end = f"{int(segment.end // 3600):02d}:{int(segment.end % 3600 // 60):02d}:{int(segment.end % 60):02d},{int(segment.end * 1000 % 1000):03d}"
-            
-            srt_file.write(f"{i}\n{start} --> {end}\n{segment.text.strip()}\n\n")
-            log_detail(f"转写段落 {i}: {segment.text.strip()}")
+            start = format_timestamp(segment.start)
+            end = format_timestamp(segment.end)
+            text = segment.text.strip()
+            content = f"{i}\n{start} --> {end}\n{text}\n\n"
+            srt.write(content)
+            logger.debug(content.rstrip())
     
-    log_detail(f"检测到语言: {info.language}")
     return output_srt, info.language
 
 async def process_media(input_path: Path, output_dir: Path, config: dict) -> Tuple[Path, str]:
@@ -144,9 +138,31 @@ async def process_media(input_path: Path, output_dir: Path, config: dict) -> Tup
     output_dir.mkdir(exist_ok=True)
     
     try:
-        process_func = process_whisper_cpp if config["engine"] == "whisper-cpp" else process_faster_whisper
-        return await process_func(input_path, output_dir, config)
+        # 音频预处理
+        if config["engine"] == "whisper-cpp":
+            wav_path = await convert_to_wav(input_path, output_dir)
+            try:
+                # 运行whisper.cpp
+                console.print(f"[info]使用模型: {Path(config['whisper_cpp']['model_path']).name}[/info]")
+                return await run_whisper_cpp(
+                    wav_path,
+                    output_dir,
+                    Path(config["whisper_cpp"]["binary_path"]),
+                    Path(config["whisper_cpp"]["model_path"])
+                )
+            finally:
+                # 清理临时文件
+                if wav_path.exists():
+                    wav_path.unlink()
+        else:
+            # 运行faster-whisper
+            console.print(f"[info]使用模型: {config['faster_whisper']['model']}[/info]")
+            return await run_faster_whisper(
+                input_path,
+                output_dir,
+                config["faster_whisper"]
+            )
+    
     except Exception as e:
-        if not isinstance(e, WhisperProcessError):
-            e = WhisperProcessError(str(e))
-        raise e
+        logger.error(str(e))
+        raise

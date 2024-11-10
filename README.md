@@ -21,7 +21,7 @@ pip install .
 
 1. 初始化配置文件：
 ```bash
-wtrans init
+wtrans-init
 ```
 
 2. 编辑配置文件：
@@ -30,37 +30,37 @@ wtrans init
 - 翻译模型和相关参数
 - Whisper引擎配置
 
-你可以通过环境变量覆盖一些配置：
-- `WHISPER_TRANSLATOR_CONFIG`: 自定义配置文件路径
+你可以通过环境变量覆盖配置：
 - `OPENAI_API_KEY`: OpenAI API密钥
 - `OPENAI_API_BASE`: OpenAI API基础URL
+- `OPENAI_API_MODEL`: OpenAI API模型名称
 
 3. 使用命令行工具：
 
 ```bash
 # 处理视频/音频文件（生成字幕并翻译）
-wtrans run video.mp4
+wtrans video.mp4
 
 # 指定输出文件
-wtrans run video.mp4 -o output.srt
+wtrans video.mp4 -o output.srt
 
 # 仅生成字幕不翻译
-wtrans run video.mp4 -m subtitle
+wtrans video.mp4 -m subtitle
 
 # 翻译已有字幕文件
-wtrans run subtitle.srt -m translate
+wtrans subtitle.srt -m translate
 
 # 批量翻译模式
-wtrans run video.mp4 -t batch -b 50
+wtrans video.mp4 -t batch -b 50
 
 # 仅输出中文字幕
-wtrans run video.mp4 -c
+wtrans video.mp4 -c
 
 # 指定输出格式（auto/srt/lrcx）
-wtrans run audio.mp3 -f lrcx
+wtrans audio.mp3 -f lrcx
 
 # 启用日志文件
-wtrans run video.mp4 -l
+wtrans video.mp4 -l
 ```
 
 4. 作为Python包使用：
@@ -88,7 +88,7 @@ await process_file(
 ## 使用建议
 
 1. 对于较长的视频，建议使用批量翻译模式（-t batch）
-2. 使用 `wtrans run -h` 查看所有可用选项
+2. 使用 `wtrans -h` 查看所有可用选项
 3. Whisper 生成的字幕可能存在错误或幻觉，建议自行检查并校正字幕内容
 
 ## 许可证

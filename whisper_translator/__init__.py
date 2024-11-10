@@ -3,7 +3,7 @@ Whisper Translator CN - 一个视频字幕生成与翻译工具
 """
 
 from .core import process_file, process_media_file, process_subtitles
-from .config import get_config, get_whisper_config, init_config, CONFIG_ENV_VAR
+from .config import get_config, get_whisper_config, init_config
 from .subtitle import parse_srt, parse_lrcx, save_srt, save_lrcx
 from .translate import translate_single, translate_batch
 from .whisper_process import process_media
@@ -17,7 +17,6 @@ __all__ = [
     'get_config',
     'get_whisper_config',
     'init_config',
-    'CONFIG_ENV_VAR',
     'parse_srt',
     'parse_lrcx',
     'save_srt',
