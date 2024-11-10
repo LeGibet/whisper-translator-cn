@@ -8,7 +8,7 @@
 - 支持使用 OpenAI API 进行准确的翻译
 - 支持批量翻译模式，提高效率
 - 支持 SRT 和 LRCX 格式的字幕/歌词文件
-- 使用 Faster Whisper 作为语音识别引擎
+- 支持 Faster Whisper 和 Whisper.cpp 两种语音识别引擎
 - 提供命令行和 Python API 两种使用方式
 
 ## 安装
