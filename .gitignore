@@ -3,6 +3,7 @@ __pycache__/
 .env
 logs/
 output/
+input/
 .DS_Store
 config.yaml
 !config.yaml.template

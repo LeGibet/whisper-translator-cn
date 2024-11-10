@@ -1,120 +1,104 @@
-from rich.console import Console
-from rich.theme import Theme
-from rich.logging import RichHandler
-import rich.errors
-from config import ConfigurationError
 import logging
+import sys
+import re
 from datetime import datetime
 from pathlib import Path
-import functools
+from rich.console import Console
+from rich.theme import Theme
+from typing import Optional
 
 # 自定义主题
-custom_theme = Theme({
+console = Console(theme=Theme({
     'info': 'cyan',
     'warning': 'yellow',
-    'error': 'red',
+    'error': 'red bold',
     'success': 'green',
     'progress': 'blue'
-})
+}))
 
-console = Console(theme=custom_theme)
-logger = None
+def strip_ansi(text: str) -> str:
+    """移除ANSI转义码"""
+    return re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])').sub('', text)
 
-class DetailedLogHandler(logging.FileHandler):
-    """详细日志处理器，记录所有输出"""
-    def __init__(self, filename):
-        super().__init__(filename, encoding='utf-8')
-        self.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+class StreamToLogger:
+    """将标准输出重定向到logger的简单封装"""
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+
+    def write(self, msg):
+        if msg.strip():
+            self.logger.log(self.level, msg.rstrip())
+
+    def flush(self):
+        pass
+
+# 创建全局logger实例
+logger = logging.getLogger('subtitle_translator')
+logger.setLevel(logging.DEBUG)
+
+# 默认的控制台处理器
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter('%(message)s'))
+logger.addHandler(console_handler)
+
+def setup_logger(log_to_file: bool = False) -> Optional[Path]:
+    """配置logger
+    
+    Args:
+        log_to_file: 是否启用文件日志
         
-    def emit(self, record):
-        try:
-            msg = self.format(record)
-            self.stream.write(msg + '\n')
-            self.flush()
-        except Exception:
-            self.handleError(record)
-
-def setup_logger(log_to_file=False):
-    """设置并返回logger"""
-    global logger
-    
-    logger = logging.getLogger('subtitle_translator')
-    logger.setLevel(logging.INFO)
-    logger.handlers.clear()
-    
-    # 控制台处理器 - 只显示简洁信息
-    console_handler = RichHandler(
-        console=console,
-        rich_tracebacks=True,
-        show_time=False,
-        show_path=False,
-        markup=True
-    )
-    console_handler.setFormatter(logging.Formatter('%(message)s'))
-    # 控制台只显示非详细日志
-    console_handler.addFilter(lambda record: not hasattr(record, 'detailed_only'))
-    logger.addHandler(console_handler)
-    
-    log_file = None
-    # 如果启用文件日志，添加详细日志处理器
-    if log_to_file:
-        log_dir = Path('logs')
-        log_dir.mkdir(exist_ok=True)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        log_file = log_dir / f'translate_{timestamp}.log'
+    Returns:
+        Optional[Path]: 日志文件路径(如果启用了文件日志)
+    """
+    if not log_to_file:
+        return None
         
-        file_handler = DetailedLogHandler(log_file)
-        logger.addHandler(file_handler)
+    # 创建日志目录
+    log_dir = Path('logs')
+    log_dir.mkdir(exist_ok=True)
+    
+    # 创建日志文件
+    log_file = log_dir / f'translate_{datetime.now():%Y%m%d_%H%M%S}.log'
+    
+    # 文件处理器 - 清除颜色代码
+    file_handler = logging.FileHandler(str(log_file), encoding='utf-8')
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter(
+        fmt='%(asctime)s [%(levelname)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    ))
+    
+    # 自定义格式化以移除颜色代码
+    original_format = file_handler.format
+    file_handler.format = lambda record: strip_ansi(original_format(record))
+    
+    logger.addHandler(file_handler)
+    
+    # 重定向标准输出到logger
+    sys.stdout = StreamToLogger(logger, logging.INFO)
+    sys.stderr = StreamToLogger(logger, logging.ERROR)
     
     return log_file
 
-def log_detail(message):
-    """记录详细日志，仅当启用日志文件时写入"""
-    if logger:
-        record = logging.LogRecord(
-            name=logger.name,
-            level=logging.INFO,
-            pathname='',
-            lineno=0,
-            msg=message,
-            args=(),
-            exc_info=None
-        )
-        record.detailed_only = True
-        logger.handle(record)
+# 导出常用日志方法
+debug = logger.debug
+info = logger.info
+warning = logger.warning
+error = logger.error
 
-def api_call(func):
-    """API调用装饰器"""
-    @functools.wraps(func)
-    async def wrapper(*args, **kwargs):
+def log_subprocess(process_output: bytes, level=logging.DEBUG):
+    """记录子进程输出
+    
+    Args:
+        process_output: 子进程输出的字节数据
+        level: 日志级别
+    """
+    if process_output:
         try:
-            result = await func(*args, **kwargs)
-            return result
-        except Exception as e:
-            logger.error(f"API调用失败: {str(e)}")
-            raise
-    return wrapper
-
-def handle_error(e: Exception):
-    """错误处理函数"""
-    error_msg = str(e)
-    if isinstance(e, FileNotFoundError):
-        error_msg = f"找不到文件: {error_msg}"
-    elif isinstance(e, ConfigurationError):
-        error_msg = f"配置错误: {error_msg}"
-    elif isinstance(e, rich.errors.LiveError):
-        error_msg = "显示错误: 不能同时显示多个进度条"
-    
-    # 确保 logger 已初始化
-    if logger is not None:
-        logger.error(error_msg)
-    
-    # 总是使用 console 显示错误，因为它是独立的
-    console.print(f"[error]✗ {error_msg}[/error]")
-
-def get_logger():
-    """获取或初始化 logger"""
-    global logger
-    if logger is None:
-        logger = setup_logger()
-    return logger
+            msg = process_output.decode().strip()
+            if msg:
+                logger.log(level, msg)
+        except UnicodeDecodeError:
+            logger.warning("无法解码子进程输出")
