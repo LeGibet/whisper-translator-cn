@@ -12,10 +12,8 @@ dependencies = [
     "rich>=13.7.0",
     "pyyaml>=6.0.1",
     "pydub>=0.25.1",
+    "faster-whisper",
 ]
-
-[project.optional-dependencies]
-faster-whisper = ["faster-whisper"]
 
 [project.scripts]
 wtrans = "whisper_translator.cli:run"
